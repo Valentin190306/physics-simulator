@@ -1,10 +1,5 @@
 import { Vec2 } from '../math/vec2';
-import {
-  centralDifference,
-  derivativeErrorVsH,
-  TEST_FUNCTIONS,
-  type Series,
-} from '../math/derivative';
+import { centralDifference, type Series } from '../math/derivative';
 import {
   integrateSeries,
   QUADRATURE_LABELS,
@@ -40,6 +35,12 @@ const SHORT_INTEGRATOR_LABELS: Record<Integrator, string> = {
   semiImplicit: 'Semi-impl.',
   rk4: 'RK4',
 };
+const TAB_INTROS: Record<TabId, string> = {
+  motion: 'Posición, velocidad y aceleración del cuerpo seleccionado.',
+  energy: 'Energía cinética, potencial y total a lo largo del tiempo.',
+  calculus: 'Derivada numérica de la señal y comparación de métodos de cuadratura.',
+  convergence: 'Error final frente a RK4: la pendiente indica el orden del integrador.',
+};
 
 function must<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
@@ -51,6 +52,13 @@ function formatH(value: number): string {
   return value >= 0.01 ? value.toFixed(3) : value.toExponential(1);
 }
 
+function formatDt(dt: number): string {
+  if (Math.abs(dt - 1 / 60) < 1e-9) return '1/60 s';
+  if (Math.abs(dt - 1 / 120) < 1e-9) return '1/120 s';
+  if (Math.abs(dt - 1 / 240) < 1e-9) return '1/240 s';
+  return `${dt.toFixed(4)} s`;
+}
+
 export class App {
   private world = new World();
   private camera = new Camera();
@@ -58,8 +66,8 @@ export class App {
 
   private canvas!: HTMLCanvasElement;
   private chart!: HTMLCanvasElement;
-  private chart2!: HTMLCanvasElement;
   private panelControls!: HTMLElement;
+  private tabIntro!: HTMLElement;
   private status!: HTMLElement;
   private fpsEl!: HTMLElement;
   private playBtn!: HTMLButtonElement;
@@ -100,11 +108,10 @@ export class App {
 
   private deriveSignal: SignalId = 'x';
   private deriveH = 0.12;
-  private quadMethod: QuadratureMethod = 'simpson';
   private quadN = 48;
-  private testFunctionId = TEST_FUNCTIONS[0].id;
   private convergence: ConvergenceSeries[] = [];
   private convergenceBusy = false;
+  private convergenceToken = 0;
   private lastResultsPaint = 0;
 
   constructor() {
@@ -117,6 +124,7 @@ export class App {
     this.bindTabs();
     this.applyPreset(this.presetId, true);
     this.buildControls();
+    this.updateTabIntro();
     this.updatePlayButton();
     requestAnimationFrame(this.loop);
   }
@@ -128,8 +136,8 @@ export class App {
   private cacheDom(): void {
     this.canvas = must<HTMLCanvasElement>('scene');
     this.chart = must<HTMLCanvasElement>('chart');
-    this.chart2 = must<HTMLCanvasElement>('chart2');
     this.panelControls = must<HTMLElement>('panelControls');
+    this.tabIntro = must<HTMLElement>('tabIntro');
     this.status = must<HTMLElement>('status');
     this.fpsEl = must<HTMLElement>('fps');
     this.playBtn = must<HTMLButtonElement>('playBtn');
@@ -245,39 +253,28 @@ export class App {
         this.activeTab = (button.dataset.tab as TabId) ?? 'motion';
         for (const other of buttons) other.classList.toggle('active', other === button);
         this.buildControls();
+        this.updateTabIntro();
+        if (this.activeTab === 'convergence') this.ensureConvergence();
       });
     }
+  }
+
+  private updateTabIntro(): void {
+    this.tabIntro.textContent = TAB_INTROS[this.activeTab];
   }
 
   private buildControls(): void {
     const container = this.panelControls;
 
     if (this.activeTab === 'calculus') {
-      const methodOptions = (Object.keys(QUADRATURE_LABELS) as QuadratureMethod[])
-        .map(
-          (method) =>
-            `<option value="${method}" ${method === this.quadMethod ? 'selected' : ''}>${QUADRATURE_LABELS[method]}</option>`,
-        )
-        .join('');
-      const functionOptions = TEST_FUNCTIONS.map(
-        (fn) =>
-          `<option value="${fn.id}" ${fn.id === this.testFunctionId ? 'selected' : ''}>${fn.label}</option>`,
-      ).join('');
-
       container.innerHTML = `
-        <div class="grid-2">
-          <div class="control">
-            <div class="label-row"><span>Señal</span></div>
-            <select id="deriveSignal">
-              <option value="x" ${this.deriveSignal === 'x' ? 'selected' : ''}>x(t)</option>
-              <option value="y" ${this.deriveSignal === 'y' ? 'selected' : ''}>y(t)</option>
-              <option value="speed" ${this.deriveSignal === 'speed' ? 'selected' : ''}>|v|(t)</option>
-            </select>
-          </div>
-          <div class="control">
-            <div class="label-row"><span>Método de cuadratura</span></div>
-            <select id="quadMethod">${methodOptions}</select>
-          </div>
+        <div class="control">
+          <div class="label-row"><span>Señal</span></div>
+          <select id="deriveSignal">
+            <option value="x" ${this.deriveSignal === 'x' ? 'selected' : ''}>x(t)</option>
+            <option value="y" ${this.deriveSignal === 'y' ? 'selected' : ''}>y(t)</option>
+            <option value="speed" ${this.deriveSignal === 'speed' ? 'selected' : ''}>|v|(t)</option>
+          </select>
         </div>
         <div class="control">
           <div class="label-row"><span>Paso h de la derivada</span><span id="hValue">${formatH(this.deriveH)} s</span></div>
@@ -288,23 +285,12 @@ export class App {
           <input id="nSlider" type="range" min="2" max="200" step="1" value="${this.quadN}" />
         </div>
         <div class="results" id="calcResults">Sin datos todavía.</div>
-        <div class="control" style="margin-top: 10px">
-          <div class="label-row"><span>Función de prueba · curva de error vs h</span></div>
-          <select id="testFn">${functionOptions}</select>
-        </div>
       `;
 
       const signal = container.querySelector<HTMLSelectElement>('#deriveSignal');
       if (signal) {
         signal.addEventListener('change', () => {
           this.deriveSignal = signal.value as SignalId;
-          this.lastResultsPaint = 0;
-        });
-      }
-      const method = container.querySelector<HTMLSelectElement>('#quadMethod');
-      if (method) {
-        method.addEventListener('change', () => {
-          this.quadMethod = method.value as QuadratureMethod;
           this.lastResultsPaint = 0;
         });
       }
@@ -326,25 +312,12 @@ export class App {
           this.lastResultsPaint = 0;
         });
       }
-      const testFn = container.querySelector<HTMLSelectElement>('#testFn');
-      if (testFn) {
-        testFn.addEventListener('change', () => {
-          this.testFunctionId = testFn.value;
-        });
-      }
       return;
     }
 
     if (this.activeTab === 'convergence') {
-      container.innerHTML = `
-        <button type="button" id="runConv">Ejecutar análisis de convergencia</button>
-        <div class="results" id="convResults">
-          Compara el error final frente a una referencia RK4 con dt = 1/8192.
-        </div>
-      `;
-      container.querySelector<HTMLButtonElement>('#runConv')?.addEventListener('click', () => {
-        this.runConvergenceAnalysis();
-      });
+      container.innerHTML = `<div class="results" id="convResults"></div>`;
+      this.paintConvergenceResults();
       return;
     }
 
@@ -457,6 +430,7 @@ export class App {
       restitution,
       friction,
     };
+    this.invalidateConvergence();
     return body;
   }
 
@@ -497,7 +471,7 @@ export class App {
     this.presetSelect.value = preset.id;
     this.presetDescription.textContent = preset.description;
     this.syncEnvironmentControls();
-    if (!initial) this.convergence = [];
+    if (!initial) this.invalidateConvergence();
   }
 
   private syncEnvironmentControls(): void {
@@ -643,8 +617,6 @@ export class App {
   // ---------------------------------------------------------------------------
 
   private renderCharts(): void {
-    this.chart2.classList.toggle('hidden', this.activeTab !== 'calculus');
-
     switch (this.activeTab) {
       case 'motion':
         this.renderMotionChart();
@@ -798,8 +770,6 @@ export class App {
         this.paintCalculusResults(frames, samples, samples > 0 ? errorSum / samples : NaN, signalLabel, derivativeLabel);
       }
     }
-
-    this.renderStepSizeCurve();
   }
 
   private paintCalculusResults(
@@ -821,59 +791,53 @@ export class App {
     const displacement = this.recorder.displacement();
     const methods = Object.keys(QUADRATURE_LABELS) as QuadratureMethod[];
 
-    const rows = methods
-      .map((method) => {
-        const value = integrateSeries(speedSeries, t0, t1, this.quadN, method);
-        const error = Math.abs(value - path);
-        const percent = path > 1e-9 ? (error / path) * 100 : 0;
-        const highlight = method === this.quadMethod ? ' class="good"' : '';
-        return `<tr${highlight}><td>${QUADRATURE_LABELS[method]}</td><td>${value.toFixed(3)} m · ${percent.toFixed(2)}%</td></tr>`;
+    const computed = methods.map((method) => {
+      const value = integrateSeries(speedSeries, t0, t1, this.quadN, method);
+      const error = Math.abs(value - path);
+      const percent = path > 1e-9 ? (error / path) * 100 : 0;
+      return { method, value, percent };
+    });
+    const best = computed.reduce((a, b) => (b.percent < a.percent ? b : a), computed[0]);
+
+    const rows = computed
+      .map(({ method, value, percent }) => {
+        const highlight = method === best.method ? ' class="good"' : '';
+        return `<tr${highlight}><td>${QUADRATURE_LABELS[method]}</td><td>${value.toFixed(3)} m</td><td>${percent.toFixed(2)}%</td></tr>`;
       })
       .join('');
 
-    const body = this.selectedBody();
-    const terminal = body ? this.terminalVelocity(body) : null;
+    const errorUnit = this.deriveSignal === 'speed' ? 'm/s²' : 'm/s';
+    const meanErrorText = Number.isFinite(meanError) ? meanError.toExponential(2) : '—';
 
     container.innerHTML = `
-      <b>${signalLabel}</b> · derivada central<br />
-      ${derivativeLabel} · h = ${formatH(this.deriveH)} s · error medio = ${Number.isFinite(meanError) ? meanError.toExponential(2) : '—'} (${samples} muestras)<br />
-      <b>Integral de |v| dt</b> · n = ${this.quadN} · trayectoria real = ${path.toFixed(3)} m<br />
-      desplazamiento neto = ${displacement.toFixed(3)} m
-      <table>${rows}</table>
-      ${terminal !== null ? `v terminal = ${terminal.toFixed(2)} m/s` : ''}
+      <div class="result-grid">
+        <div class="result-card">
+          <span class="result-label">Error medio</span>
+          <span class="result-value">${meanErrorText}</span>
+          <span class="result-unit">${errorUnit}</span>
+          <span class="result-note">${signalLabel} → ${derivativeLabel} · h = ${formatH(this.deriveH)} s · ${samples} muestras</span>
+        </div>
+        <div class="result-card">
+          <span class="result-label">Trayectoria</span>
+          <span class="result-value">${path.toFixed(2)}</span>
+          <span class="result-unit">m</span>
+          <span class="result-note">desplazamiento neto ${displacement.toFixed(2)} m</span>
+        </div>
+      </div>
+      <div class="table-title">Integral de |v| dt · n = ${this.quadN}</div>
+      <table>
+        <thead><tr><th>Método</th><th>Valor</th><th>Error rel.</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p class="results-note">La fila verde es el método con menor error para esta trayectoria.</p>
     `;
-  }
-
-  private renderStepSizeCurve(): void {
-    const test = TEST_FUNCTIONS.find((fn) => fn.id === this.testFunctionId) ?? TEST_FUNCTIONS[0];
-    const hs: number[] = [];
-    for (let exponent = -7; exponent <= -0.3; exponent += 0.2) {
-      hs.push(Math.pow(10, exponent));
-    }
-
-    const points = derivativeErrorVsH(test.f, test.df, hs, test.range, 30);
-    drawChart(this.chart2, {
-      series: [
-        {
-          x: points.map((point) => point.h),
-          y: points.map((point) => point.err),
-          color: '#f72585',
-          label: `error de la derivada de ${test.label}`,
-          width: 2,
-        },
-      ],
-      logX: true,
-      logY: true,
-      xLabel: 'h (s)',
-      yLabel: 'error medio',
-    });
   }
 
   private renderConvergenceChart(): void {
     if (!this.convergence.length) {
       drawChart(this.chart, {
         series: [],
-        emptyMessage: 'Pulsa "Ejecutar análisis de convergencia"',
+        emptyMessage: this.convergenceBusy ? 'Calculando…' : 'Sin datos todavía',
       });
       return;
     }
@@ -883,7 +847,7 @@ export class App {
         x: result.points.map((point) => point.dt),
         y: result.points.map((point) => point.error),
         color: result.color,
-        label: `${SHORT_INTEGRATOR_LABELS[result.integrator]} p=${result.slope.toFixed(1)}`,
+        label: `${SHORT_INTEGRATOR_LABELS[result.integrator]} p=${result.slope.toFixed(2)}`,
         width: 2,
       })),
       logX: true,
@@ -893,12 +857,64 @@ export class App {
     });
   }
 
+  private paintConvergenceResults(): void {
+    const container = document.getElementById('convResults');
+    if (!container) return;
+
+    if (!this.convergence.length) {
+      container.textContent = this.convergenceBusy ? 'Calculando…' : 'Sin datos todavía.';
+      return;
+    }
+
+    const rows = this.convergence
+      .map((result) => {
+        const point = result.points.reduce(
+          (best, candidate) =>
+            Math.abs(candidate.dt - this.dt) < Math.abs(best.dt - this.dt) ? candidate : best,
+          result.points[0],
+        );
+        const relative = result.referencePath > 0 ? (point.error / result.referencePath) * 100 : 0;
+        return `<tr>
+          <td><span class="dot" style="background:${result.color}"></span>${SHORT_INTEGRATOR_LABELS[result.integrator]}</td>
+          <td>${result.slope.toFixed(2)} <span class="muted">(${EXPECTED_SLOPES[result.integrator]})</span></td>
+          <td>${point.error.toFixed(2)} m</td>
+          <td>${relative.toFixed(2)}%</td>
+        </tr>`;
+      })
+      .join('');
+
+    container.innerHTML = `
+      <table>
+        <thead><tr><th>Método</th><th>Orden</th><th>Error</th><th>Rel.</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p class="results-note">Error de posición final a dt = ${formatDt(this.dt)} · referencia RK4 con dt = 1/8192.</p>
+    `;
+  }
+
+  private ensureConvergence(): void {
+    if (this.convergence.length || this.convergenceBusy) {
+      this.paintConvergenceResults();
+      return;
+    }
+    this.runConvergenceAnalysis();
+  }
+
+  private invalidateConvergence(): void {
+    this.convergenceToken++;
+    this.convergence = [];
+    this.convergenceBusy = false;
+    if (this.activeTab === 'convergence') {
+      this.paintConvergenceResults();
+      this.ensureConvergence();
+    }
+  }
+
   private runConvergenceAnalysis(): void {
     if (this.convergenceBusy) return;
     this.convergenceBusy = true;
-
-    const container = document.getElementById('convResults');
-    if (container) container.textContent = 'Calculando…';
+    const token = ++this.convergenceToken;
+    this.paintConvergenceResults();
 
     const radius = Number(this.radiusInput.value);
     const mass = Number(this.massInput.value);
@@ -923,17 +939,12 @@ export class App {
       }
       if (analysisConfig.gravityY === 0) analysisConfig.gravityY = -9.81;
 
-      this.convergence = runConvergence(analysisConfig, launch, 2);
-      this.convergenceBusy = false;
+      const results = runConvergence(analysisConfig, launch, 2);
+      if (token !== this.convergenceToken) return;
 
-      if (!container) return;
-      const rows = this.convergence
-        .map(
-          (result) =>
-            `<div><b>${result.label}</b>: pendiente ${result.slope.toFixed(2)} (esperado ${EXPECTED_SLOPES[result.integrator]})</div>`,
-        )
-        .join('');
-      container.innerHTML = `${rows}<div style="margin-top:6px">Pendiente positiva ⇒ error ∝ dt^p: al reducir dt, el error cae. Se usa arrastre cuadrático si el entorno no tiene aire. Referencia: RK4 con dt = 1/8192.</div>`;
+      this.convergence = results;
+      this.convergenceBusy = false;
+      this.paintConvergenceResults();
     }, 30);
   }
 }

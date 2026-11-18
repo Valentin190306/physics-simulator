@@ -24,7 +24,7 @@
               <option value="0.0041666667">1/240 s</option>
             </select>
           </label>
-          <label class="inline">Integrador temporal (EDO)
+          <label class="inline">Integrador (EDO)
             <select id="integratorSelect">
               <option value="explicit">Euler explícito</option>
               <option value="semiImplicit" selected>Euler semi-implícito</option>
@@ -42,7 +42,6 @@
           </label>
         </div>
         <div class="spacer"></div>
-        <div class="fps" id="fps">— fps</div>
       </header>
 
       <main>
@@ -68,7 +67,7 @@
           </section>
 
           <section>
-            <h2>Atmósfera</h2>
+            <h2>Ambiente</h2>
             <div class="control">
               <div class="label-row"><span>Modelo de arrastre</span></div>
               <select id="airModel">
@@ -78,45 +77,47 @@
               </select>
             </div>
             <div class="control">
-              <div class="label-row"><span>Densidad ρ</span><span id="airDensityValue">1.20 kg/m³</span></div>
-              <input id="airDensity" type="range" min="0" max="3" step="0.05" value="1.2" />
-            </div>
-            <div class="control">
-              <div class="label-row"><span>Coef. Cd</span><span id="dragCdValue">0.60</span></div>
-              <input id="dragCd" type="range" min="0" max="1.5" step="0.05" value="0.6" />
-            </div>
-            <div class="control">
-              <div class="label-row"><span>Viento horizontal</span><span id="windXValue">0.0 m/s</span></div>
-              <input id="windX" type="range" min="-15" max="15" step="0.5" value="0" />
-            </div>
-          </section>
-
-          <section>
-            <h2>Gravedad</h2>
-            <div class="control">
-              <div class="label-row"><span>g</span><span id="gravityValue">9.81 m/s²</span></div>
+              <div class="label-row"><span>Gravedad g</span><span id="gravityValue">9.81 m/s²</span></div>
               <input id="gravity" type="range" min="0" max="20" step="0.1" value="9.81" />
             </div>
+            <details class="advanced">
+              <summary>Avanzado · densidad, Cd y viento</summary>
+              <div class="control">
+                <div class="label-row"><span>Densidad ρ</span><span id="airDensityValue">1.20 kg/m³</span></div>
+                <input id="airDensity" type="range" min="0" max="3" step="0.05" value="1.2" />
+              </div>
+              <div class="control">
+                <div class="label-row"><span>Coef. Cd</span><span id="dragCdValue">0.60</span></div>
+                <input id="dragCd" type="range" min="0" max="1.5" step="0.05" value="0.6" />
+              </div>
+              <div class="control">
+                <div class="label-row"><span>Viento horizontal</span><span id="windXValue">0.0 m/s</span></div>
+                <input id="windX" type="range" min="-15" max="15" step="0.5" value="0" />
+              </div>
+            </details>
           </section>
 
           <section>
-            <h2>Dibujo</h2>
+            <h2>Vista</h2>
             <label class="check"><input id="drawTraces" type="checkbox" checked /> Trayectorias</label>
             <label class="check"><input id="drawVectors" type="checkbox" /> Vectores v y a</label>
             <label class="check"><input id="drawContacts" type="checkbox" /> Puntos de contacto</label>
           </section>
 
           <section>
-            <h2>Presets</h2>
+            <h2>Escenas</h2>
             <select id="presetSelect"></select>
             <p id="presetDescription" class="hint-text"></p>
           </section>
 
-          <section class="help">
-            <p><b>Arrastra</b> en el lienzo para lanzar. Suelta para crear.</p>
-            <p><b>Click</b> en un cuerpo para seleccionarlo y ver su cálculo.</p>
-            <p><b>Espacio</b> pausa · <b>Supr</b> borra el seleccionado.</p>
-          </section>
+          <details class="help-details">
+            <summary>Cómo usar</summary>
+            <div class="help">
+              <p><b>Arrastra</b> en el lienzo para lanzar. Suelta para crear.</p>
+              <p><b>Click</b> en un cuerpo para seleccionarlo y ver su cálculo.</p>
+              <p><b>Espacio</b> pausa · <b>Supr</b> borra el seleccionado.</p>
+            </div>
+          </details>
         </aside>
 
         <section class="stage">
@@ -128,16 +129,19 @@
           <nav class="tabs">
             <button data-tab="motion" class="active" type="button">Movimiento</button>
             <button data-tab="energy" type="button">Energía</button>
-            <button data-tab="calculus" type="button">Derivadas e integrales</button>
-            <button data-tab="convergence" type="button">Convergencia del integrador</button>
+            <button data-tab="calculus" type="button">Derivada</button>
+            <button data-tab="convergence" type="button">Precisión</button>
           </nav>
+          <p id="tabIntro" class="tab-intro"></p>
           <div id="panelControls"></div>
           <canvas id="chart"></canvas>
-          <canvas id="chart2"></canvas>
         </aside>
       </main>
 
-      <footer id="status">Listo.</footer>
+      <footer class="statusbar">
+        <span id="status">Listo.</span>
+        <span id="fps">— fps</span>
+      </footer>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

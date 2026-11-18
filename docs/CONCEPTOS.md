@@ -514,11 +514,31 @@ Consecuencias:
 
 El viento se resta de la velocidad del cuerpo antes de calcular el arrastre. Por
 eso el arrastre no depende de la velocidad absoluta, sino de la velocidad
-respecto del aire.
+respecto del aire:
 
-Con viento nulo y velocidad horizontal no nula, el arrastre tiene componente
-horizontal. Eso explica que el vector de aceleración se incline aunque no haya
-viento: la pelota “siente” aire quieto.
+```
+v_rel = v − v_aire
+F_arrastre = −k·|v_rel|·v_rel
+```
+
+El signo menos indica que el arrastre apunta siempre en sentido contrario a
+`v_rel`, no necesariamente contrario a la velocidad del cuerpo. Sin viento,
+`v_rel = v`: en caída vertical el arrastre es vertical y frena la caída; en
+movimiento horizontal frena el avance.
+
+Con viento, en cambio, un cuerpo que cae verticalmente tiene `v_rel,x = −w_x`,
+así que recibe una fuerza horizontal además de la vertical. Por eso el vector de
+aceleración se inclina aunque el cuerpo no tenga velocidad horizontal: la pelota
+“siente” el aire en movimiento. La componente vertical del arrastre sigue
+oponiéndose a la caída, de modo que el viento no impide alcanzar la velocidad
+terminal vertical.
+
+En el límite, la velocidad terminal relativa es `(0, −v_t)`. Con viento
+horizontal, eso significa que el cuerpo deriva con el aire:
+
+```
+v = (w_x, −v_t)
+```
 
 ---
 
@@ -574,10 +594,10 @@ h* ≈ (6·ε_máquina·|f| / |f‴|)^(1/3)
 
 Para magnitudes de orden 1, `h* ≈ 10⁻⁵`.
 
-### 6.3 La curva en U
+### 6.3 La curva en U (material teórico)
 
-La pestaña **Derivadas e integrales** muestra una curva de error frente a `h` en
-escala log–log para una función analítica de prueba.
+El error de la diferencia central, representado frente a `h` en escala log–log,
+tiene forma de U:
 
 - **Rama izquierda** (`h` grande): domina el truncamiento. En log–log, pendiente
   **+2**.
@@ -585,7 +605,12 @@ escala log–log para una función analítica de prueba.
   **−1**.
 - **Mínimo:** mejor compromiso entre ambos errores.
 
-El error graficado es el **error absoluto medio** sobre 30 muestras:
+La interfaz simplificada ya no dibuja esta curva: la pestaña **Derivada** usa una
+sola gráfica con la señal, la derivada numérica y la derivada del simulador. El
+cálculo sigue disponible en `derivativeErrorVsH`, que se usa en los tests y en el
+análisis teórico de este documento.
+
+El error es el **error absoluto medio** sobre 30 muestras:
 
 ```
 E(h) = (1/N)·Σ |D_h f(t_i) − f′(t_i)|
@@ -596,7 +621,8 @@ magnitud pueden quedar desplazadas verticalmente.
 
 ### 6.4 Funciones de prueba
 
-La app incluye cuatro funciones con derivada analítica exacta:
+El módulo `derivative.ts` incluye cuatro funciones con derivada analítica exacta,
+usadas por los tests y por el barrido teórico de error:
 
 | Función | `f(t)` | `f′(t)` | `f‴(t)` | ¿Curva en U? |
 | --- | --- | --- | --- | --- |
@@ -611,7 +637,7 @@ izquierda; solo se ve el crecimiento por redondeo al achicar `h`. No es un bug.
 
 ### 6.5 Barrido de `h`
 
-El barrido usa:
+El barrido de `h` de `derivativeErrorVsH` usa:
 
 ```
 h = 10^e,  e = −7, −6.8, −6.6, …, −0.4
@@ -632,8 +658,8 @@ la misma zona y no hay efectos de borde.
 
 ### 6.6 Datos analíticos frente a datos registrados
 
-La curva en U usa funciones analíticas porque así la derivada de referencia es
-exacta. Si se usaran los datos del `Recorder`, el error incluiría además:
+El barrido teórico usa funciones analíticas porque así la derivada de referencia
+es exacta. Si se usaran los datos del `Recorder`, el error incluiría además:
 
 - la interpolación lineal entre muestras,
 - el intervalo de muestreo (~16.7 ms a 60 fps),
@@ -641,9 +667,9 @@ exacta. Si se usaran los datos del `Recorder`, el error incluiría además:
 - discontinuidades por colisiones.
 
 Con datos registrados, el mínimo de la curva aparecería cerca del intervalo de
-muestreo, no en `10⁻⁵`. El gráfico superior de la pestaña sí usa datos
-registrados: compara la derivada numérica de `x(t)`, `y(t)` o `|v|(t)` contra
-`vx`, `vy` o `d|v|/dt` del simulador.
+muestreo, no en `10⁻⁵`. La gráfica de la pestaña usa datos registrados: compara
+la derivada numérica de `x(t)`, `y(t)` o `|v|(t)` contra `vx`, `vy` o
+`d|v|/dt` del simulador.
 
 ### 6.7 Error práctico que muestra el panel
 
@@ -654,8 +680,8 @@ error_medio = media |D_h(señal) − derivada_simulador|
 ```
 
 Ese valor es mucho mayor que el mínimo de la curva analítica porque mezcla todos
-los errores anteriores. La etiqueta “error medio” del panel superior se refiere a
-esa comparación práctica, no al error intrínseco de la fórmula.
+los errores anteriores. La tarjeta «Error medio» de la pestaña se refiere a esa
+comparación práctica, no al error intrínseco de la fórmula.
 
 ---
 
@@ -840,7 +866,12 @@ error(dt) = |r_final(dt) − r_final(referencia)|
 ```
 
 5. Ajusta una recta por mínimos cuadrados a `log10(error)` vs `log10(dt)`.
-6. Muestra la pendiente.
+6. Muestra la pendiente en la gráfica y, en la tabla, el orden medido junto con
+   el error absoluto y relativo al `dt` actual.
+
+La pestaña **Precisión** ejecuta el análisis automáticamente al abrirse y guarda
+el resultado en caché. La caché se invalida al cambiar de escena o al lanzar un
+cuerpo nuevo.
 
 La referencia es fiable porque el error de RK4 con `dt = 1/8192` es del orden de
 `10⁻¹⁶`, cerca de la precisión de la máquina.
@@ -855,7 +886,7 @@ El error se acota inferiormente a `10⁻¹⁵` para evitar `log(0)`.
 | Euler semi-implícito | ≈ +1 |
 | RK4 | ≈ +4 |
 
-Valores medidos en la app: aproximadamente **0.99**, **1.00** y **4.03**.
+Valores medidos en la app: aproximadamente **0.99**, **1.00** y **4.04**.
 
 Una pendiente `p = 4` significa que al reducir `dt` a la mitad el error cae
 alrededor de 16 veces. Una pendiente `p = 1`, que cae a la mitad.
@@ -1068,30 +1099,40 @@ Resultado actual: **20 tests en 6 archivos**, todos aprobados.
 
 - **Pausar / Reanudar**: detiene o continúa la simulación (`Espacio`).
 - **Paso**: avanza un `dt` (`S`).
-- **Reset**: recarga el preset actual (`R`).
+- **Reset**: recarga la escena actual (`R`).
 - **Limpiar**: elimina todos los cuerpos.
 - **dt**: 1/60, 1/120 (por defecto) o 1/240 s.
-- **Integrador temporal (EDO)**: Euler explícito, semi-implícito o RK4.
+- **Integrador (EDO)**: Euler explícito, semi-implícito o RK4.
 - **Velocidad**: 0.1×, 0.25×, 0.5×, 1× o 2×.
-- **fps**: suavizado de fotogramas por segundo.
+
+### Pie de estado
+
+- **Estado**: mensajes de la simulación y del análisis.
+- **fps**: fotogramas por segundo suavizados.
 
 ### Panel izquierdo
 
-- Radio, masa, restitución y fricción del próximo cuerpo.
-- Modelo de arrastre, densidad, `Cd` y viento horizontal.
-- Gravedad.
-- Dibujo: trayectorias, vectores, contactos.
-- Presets y descripción.
-- Ayuda de interacción.
+- **Cuerpo nuevo**: radio, masa, restitución y fricción del próximo cuerpo.
+- **Ambiente**: modelo de arrastre y gravedad. El desplegable **Avanzado**
+  agrupa densidad `ρ`, coeficiente `Cd` y viento horizontal.
+- **Vista**: trayectorias, vectores y contactos.
+- **Escenas**: preset y descripción.
+- **Cómo usar**: ayuda de interacción plegada.
 
 ### Pestañas del panel derecho
+
+Cada pestaña muestra una sola gráfica y un resumen de resultados.
 
 - **Movimiento**: `y(t)`, `vy(t)` y `ay(t)` del cuerpo seleccionado, con línea
   de velocidad terminal si hay aire.
 - **Energía**: cinética, potencial y total.
-- **Derivadas e integrales**: derivada numérica de la señal, comparación con la
-  derivada del simulador, cuadraturas y curva de error vs `h`.
-- **Convergencia del integrador**: análisis de orden con referencia RK4.
+- **Derivada**: señal elegida junto con su derivada numérica y la derivada del
+  simulador. Las tarjetas resumen el error medio y la longitud de trayectoria;
+  la tabla compara las cinco cuadraturas de `∫|v| dt` y resalta la de menor
+  error.
+- **Precisión**: análisis de orden con referencia RK4. Se ejecuta al abrir la
+  pestaña y la tabla muestra orden, error absoluto y error relativo al `dt`
+  actual.
 
 ### Controles
 
@@ -1106,13 +1147,15 @@ Resultado actual: **20 tests en 6 archivos**, todos aprobados.
 
 ### Experimentos sugeridos
 
-1. **Tiro parabólico**: preset sin aire, comparar la trayectoria con la
-   parábola y ver la energía.
+1. **Tiro parabólico**: escena sin aire, comparar la trayectoria con la parábola
+   y ver la energía.
 2. **Arrastre**: activar modelo cuadrático y observar cómo se inclina el vector
    de aceleración y cómo aparece la velocidad terminal.
-3. **Derivada**: elegir `sin(t)` en la curva de error, mover `h` y ver la U.
-4. **Cuadratura**: comparar Riemann, trapecio y Simpson contra la longitud real.
-5. **Convergencia**: ejecutar el análisis y comprobar pendientes +1, +1 y +4.
+3. **Derivada**: mover `h` y observar el error medio de la tarjeta; un `h` muy
+   chico aumenta el redondeo y uno grande aumenta el truncamiento.
+4. **Cuadratura**: comparar la tabla y ver qué método queda más cerca de la
+   longitud real de la trayectoria.
+5. **Precisión**: abrir la pestaña y comprobar los órdenes +1, +1 y +4.
 
 ---
 

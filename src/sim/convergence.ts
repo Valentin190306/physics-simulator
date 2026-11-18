@@ -18,6 +18,8 @@ export interface ConvergenceSeries {
   color: string;
   points: { dt: number; error: number }[];
   slope: number;
+  /** Longitud de la trayectoria de referencia, para expresar el error relativo. */
+  referencePath: number;
 }
 
 const INTEGRATORS: { id: Integrator; label: string; color: string }[] = [
@@ -34,7 +36,7 @@ function simulate(
   dt: number,
   duration: number,
   integrator: Integrator,
-): Vec2 {
+): { position: Vec2; pathLength: number } {
   const world = new World();
   world.setConfig({ ...config, integrator });
   const body = world.addBody(
@@ -50,10 +52,14 @@ function simulate(
   );
 
   const steps = Math.max(1, Math.round(duration / dt));
+  let pathLength = 0;
+  let previous = body.position.clone();
   for (let i = 0; i < steps; i++) {
     world.stepExact(dt);
+    pathLength += body.position.sub(previous).length();
+    previous = body.position.clone();
   }
-  return body.position.clone();
+  return { position: body.position.clone(), pathLength };
 }
 
 export function runConvergence(
@@ -65,8 +71,8 @@ export function runConvergence(
 
   return INTEGRATORS.map(({ id, label, color }) => {
     const points = DTS.map((dt) => {
-      const position = simulate(config, launch, dt, duration, id);
-      const error = Math.max(position.sub(reference).length(), 1e-15);
+      const simulated = simulate(config, launch, dt, duration, id);
+      const error = Math.max(simulated.position.sub(reference.position).length(), 1e-15);
       return { dt, error };
     });
 
@@ -80,6 +86,7 @@ export function runConvergence(
       color,
       points,
       slope: regression.slope,
+      referencePath: reference.pathLength,
     };
   });
 }

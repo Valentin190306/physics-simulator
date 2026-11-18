@@ -39,24 +39,23 @@ Motor de física escrito desde cero, sin librerías externas. La interfaz está 
 
 - **Derivada numérica** por diferencia central sobre la señal registrada, con
   slider de `h` y comparación contra la derivada del simulador.
-- **Curva en U del error**: error de la derivada frente a `h` en escala
-  log–log. Se aprecia el error de truncamiento (`O(h²)`) y el de redondeo.
 - **Cuadraturas** de Riemann (izquierda, derecha), punto medio, trapecio y
-  Simpson para estimar la distancia recorrida integrando `|v| dt`, comparadas
-  con la longitud real de la trayectoria.
-- **Convergencia de integradores**: Euler explícito, Euler semi-implícito y RK4,
-  con el mismo lanzamiento a distintos `dt`. La pendiente medida debe ser
-  aproximadamente `+1`, `+1` y `+4` respectivamente.
+  Simpson para estimar la distancia recorrida integrando `|v| dt`. La pestaña
+  muestra los cinco métodos en una tabla, comparados con la longitud real de la
+  trayectoria.
+- **Precisión del integrador**: Euler explícito, Euler semi-implícito y RK4 con
+  el mismo lanzamiento a distintos `dt`, frente a una referencia RK4. La tabla
+  indica el orden medido y el error absoluto y relativo al `dt` actual.
 - **Energía** cinética, potencial y total a lo largo del tiempo.
 
 ### Nomenclatura
 
-- **Integrador temporal (EDO)**: método que avanza el estado del sistema en el
-  tiempo resolviendo las ecuaciones de movimiento (Euler, RK4).
+- **Integrador (EDO)**: método que avanza el estado del sistema en el tiempo
+  resolviendo las ecuaciones de movimiento (Euler, RK4).
 - **Método de cuadratura**: regla que aproxima una integral definida
   (Riemann, punto medio, trapecio, Simpson).
 
-![Panel de derivadas e integrales](docs/calculus.png)
+![Pestaña Derivada con la tabla de cuadratura](docs/calculus.png)
 
 ## Requisitos
 
@@ -154,8 +153,9 @@ n = clamp(ceil(v_max·dt / presupuesto), 1, 24)
 ## Notas de cálculo
 
 - La derivada central `[f(t+h) − f(t−h)] / 2h` tiene error de truncamiento
-  `O(h²)` y error de redondeo que crece al disminuir `h`. El mínimo de la curva
-  en U aparece alrededor de `h ≈ 10⁻⁵`.
+  `O(h²)` y error de redondeo que crece al disminuir `h`. El mínimo teórico de
+  la curva en U aparece alrededor de `h ≈ 10⁻⁵`; la interfaz ya no dibuja esa
+  curva, pero conserva el cálculo en `derivativeErrorVsH`.
 - La integral de `|v| dt` aproxima la longitud de la trayectoria. Comparar los
   métodos con la distancia real muestra el orden de cada cuadratura: Riemann
   `O(h)`, trapecio `O(h²)` y Simpson `O(h⁴)` para funciones suaves.
