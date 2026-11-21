@@ -60,12 +60,18 @@ export function wedgeShape(a: Vec2, b: Vec2, baseY = 0, style: ShapeStyle = {}):
   return polyShape([a.clone(), b.clone(), new Vec2(b.x, baseY), new Vec2(a.x, baseY)], style);
 }
 
-/** Marco del mundo: suelo, paredes izquierda y derecha. */
-export function frameShapes(width = 20, height = 12): StaticShape[] {
+/** Altura a la que llegan las paredes laterales: a efectos prácticos, infinito. */
+const WALL_TOP = 1e4;
+
+/** Marco del mundo: suelo, paredes izquierda y derecha (las paredes suben hasta WALL_TOP). */
+export function frameShapes(width = 20): StaticShape[] {
+  const wallBottom = -2;
+  const wallHeight = WALL_TOP - wallBottom;
+  const wallCy = (WALL_TOP + wallBottom) / 2;
   return [
     rectShape(width / 2, -0.5, width + 2, 1),
-    rectShape(-0.5, height / 2, 1, height + 4),
-    rectShape(width + 0.5, height / 2, 1, height + 4),
+    rectShape(-0.5, wallCy, 1, wallHeight),
+    rectShape(width + 0.5, wallCy, 1, wallHeight),
   ];
 }
 

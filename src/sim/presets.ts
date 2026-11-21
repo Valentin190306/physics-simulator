@@ -86,7 +86,7 @@ function makeBody(
 
 export function buildPreset(id: string, defaults: BodyDefaults): PresetResult {
   const preset = info(id);
-  const shapes: StaticShape[] = frameShapes(20, 12);
+  const shapes: StaticShape[] = frameShapes(20);
   const bodies: Body[] = [];
   let env: Partial<WorldConfig> = {
     airModel: 'none',

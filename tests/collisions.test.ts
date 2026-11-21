@@ -71,7 +71,7 @@ describe('colisiones', () => {
 
   it('una bola en reposo no se hunde en el suelo', () => {
     const world = new World();
-    world.setShapes(frameShapes(20, 12));
+    world.setShapes(frameShapes(20));
     world.setConfig({ gravityY: -9.81, airModel: 'none' });
     const ball = world.addBody(
       new Body({
@@ -93,7 +93,7 @@ describe('colisiones', () => {
 
   it('una bola rápida no atraviesa el suelo con substepping', () => {
     const world = new World();
-    world.setShapes(frameShapes(20, 12));
+    world.setShapes(frameShapes(20));
     world.setConfig({ gravityY: -9.81, airModel: 'none' });
     const ball = world.addBody(
       new Body({
