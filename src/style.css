@@ -460,19 +460,6 @@ details.help-details {
   color: var(--muted);
 }
 
-.dot {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  margin-right: 5px;
-  border-radius: 50%;
-  vertical-align: middle;
-}
-
-.muted {
-  color: var(--muted);
-}
-
 #chart {
   display: block;
   width: 100%;

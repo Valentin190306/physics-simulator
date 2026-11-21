@@ -11,11 +11,10 @@ import { Camera } from '../render/camera';
 import { drawChart } from '../render/charts';
 import type { ChartSeries } from '../render/charts';
 import { renderScene, type DragState } from '../render/scene';
-import { runConvergence, type ConvergenceSeries, type LaunchSpec } from '../sim/convergence';
 import { buildPreset, PRESETS } from '../sim/presets';
 import { Recorder, type RecordedFrame } from '../sim/recorder';
 
-type TabId = 'motion' | 'energy' | 'calculus' | 'convergence';
+type TabId = 'motion' | 'energy' | 'calculus';
 type SignalId = 'x' | 'y' | 'speed';
 
 const SLINGSHOT_STRENGTH = 3.2;
@@ -25,21 +24,10 @@ const INTEGRATOR_LABELS: Record<Integrator, string> = {
   semiImplicit: 'Euler semi-implícito',
   rk4: 'RK4',
 };
-const EXPECTED_SLOPES: Record<Integrator, string> = {
-  explicit: '≈ +1',
-  semiImplicit: '≈ +1',
-  rk4: '≈ +4',
-};
-const SHORT_INTEGRATOR_LABELS: Record<Integrator, string> = {
-  explicit: 'Euler',
-  semiImplicit: 'Semi-impl.',
-  rk4: 'RK4',
-};
 const TAB_INTROS: Record<TabId, string> = {
   motion: 'Posición, velocidad y aceleración del cuerpo seleccionado.',
   energy: 'Energía cinética, potencial y total a lo largo del tiempo.',
   calculus: 'Derivada numérica de la señal y comparación de métodos de cuadratura.',
-  convergence: 'Error final frente a RK4: la pendiente indica el orden del integrador.',
 };
 
 function must<T extends HTMLElement>(id: string): T {
@@ -50,13 +38,6 @@ function must<T extends HTMLElement>(id: string): T {
 
 function formatH(value: number): string {
   return value >= 0.01 ? value.toFixed(3) : value.toExponential(1);
-}
-
-function formatDt(dt: number): string {
-  if (Math.abs(dt - 1 / 60) < 1e-9) return '1/60 s';
-  if (Math.abs(dt - 1 / 120) < 1e-9) return '1/120 s';
-  if (Math.abs(dt - 1 / 240) < 1e-9) return '1/240 s';
-  return `${dt.toFixed(4)} s`;
 }
 
 export class App {
@@ -104,14 +85,10 @@ export class App {
 
   private activeTab: TabId = 'motion';
   private presetId = 'parabola';
-  private lastLaunch: LaunchSpec | null = null;
 
   private deriveSignal: SignalId = 'x';
   private deriveH = 0.12;
   private quadN = 48;
-  private convergence: ConvergenceSeries[] = [];
-  private convergenceBusy = false;
-  private convergenceToken = 0;
   private lastResultsPaint = 0;
 
   constructor() {
@@ -122,7 +99,7 @@ export class App {
     this.bindCanvas();
     this.bindKeyboard();
     this.bindTabs();
-    this.applyPreset(this.presetId, true);
+    this.applyPreset(this.presetId);
     this.buildControls();
     this.updateTabIntro();
     this.updatePlayButton();
@@ -254,7 +231,6 @@ export class App {
         for (const other of buttons) other.classList.toggle('active', other === button);
         this.buildControls();
         this.updateTabIntro();
-        if (this.activeTab === 'convergence') this.ensureConvergence();
       });
     }
   }
@@ -312,12 +288,6 @@ export class App {
           this.lastResultsPaint = 0;
         });
       }
-      return;
-    }
-
-    if (this.activeTab === 'convergence') {
-      container.innerHTML = `<div class="results" id="convResults"></div>`;
-      this.paintConvergenceResults();
       return;
     }
 
@@ -422,19 +392,10 @@ export class App {
     const body = new Body({ position: clamped, velocity, radius, mass, restitution, friction });
     this.world.addBody(body);
     this.selectBody(body);
-    this.lastLaunch = {
-      position: clamped.clone(),
-      velocity: velocity.clone(),
-      radius,
-      mass,
-      restitution,
-      friction,
-    };
-    this.invalidateConvergence();
     return body;
   }
 
-  private applyPreset(id: string, initial = false): void {
+  private applyPreset(id: string): void {
     const preset = PRESETS.find((item) => item.id === id) ?? PRESETS[0];
     this.presetId = preset.id;
 
@@ -454,16 +415,6 @@ export class App {
 
     const last = result.bodies[result.bodies.length - 1] ?? null;
     this.selectBody(last);
-    if (last) {
-      this.lastLaunch = {
-        position: last.position.clone(),
-        velocity: last.velocity.clone(),
-        radius: last.radius,
-        mass: last.mass,
-        restitution: last.restitution,
-        friction: last.friction,
-      };
-    }
 
     this.accumulator = 0;
     this.ghost = [];
@@ -471,7 +422,6 @@ export class App {
     this.presetSelect.value = preset.id;
     this.presetDescription.textContent = preset.description;
     this.syncEnvironmentControls();
-    if (!initial) this.invalidateConvergence();
   }
 
   private syncEnvironmentControls(): void {
@@ -626,9 +576,6 @@ export class App {
         break;
       case 'calculus':
         this.renderCalculusPanel();
-        break;
-      case 'convergence':
-        this.renderConvergenceChart();
         break;
     }
   }
@@ -831,120 +778,5 @@ export class App {
       </table>
       <p class="results-note">La fila verde es el método con menor error para esta trayectoria.</p>
     `;
-  }
-
-  private renderConvergenceChart(): void {
-    if (!this.convergence.length) {
-      drawChart(this.chart, {
-        series: [],
-        emptyMessage: this.convergenceBusy ? 'Calculando…' : 'Sin datos todavía',
-      });
-      return;
-    }
-
-    drawChart(this.chart, {
-      series: this.convergence.map((result) => ({
-        x: result.points.map((point) => point.dt),
-        y: result.points.map((point) => point.error),
-        color: result.color,
-        label: `${SHORT_INTEGRATOR_LABELS[result.integrator]} p=${result.slope.toFixed(2)}`,
-        width: 2,
-      })),
-      logX: true,
-      logY: true,
-      xLabel: 'dt (s)',
-      yLabel: 'error final (m)',
-    });
-  }
-
-  private paintConvergenceResults(): void {
-    const container = document.getElementById('convResults');
-    if (!container) return;
-
-    if (!this.convergence.length) {
-      container.textContent = this.convergenceBusy ? 'Calculando…' : 'Sin datos todavía.';
-      return;
-    }
-
-    const rows = this.convergence
-      .map((result) => {
-        const point = result.points.reduce(
-          (best, candidate) =>
-            Math.abs(candidate.dt - this.dt) < Math.abs(best.dt - this.dt) ? candidate : best,
-          result.points[0],
-        );
-        const relative = result.referencePath > 0 ? (point.error / result.referencePath) * 100 : 0;
-        return `<tr>
-          <td><span class="dot" style="background:${result.color}"></span>${SHORT_INTEGRATOR_LABELS[result.integrator]}</td>
-          <td>${result.slope.toFixed(2)} <span class="muted">(${EXPECTED_SLOPES[result.integrator]})</span></td>
-          <td>${point.error.toFixed(2)} m</td>
-          <td>${relative.toFixed(2)}%</td>
-        </tr>`;
-      })
-      .join('');
-
-    container.innerHTML = `
-      <table>
-        <thead><tr><th>Método</th><th>Orden</th><th>Error</th><th>Rel.</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-      <p class="results-note">Error de posición final a dt = ${formatDt(this.dt)} · referencia RK4 con dt = 1/8192.</p>
-    `;
-  }
-
-  private ensureConvergence(): void {
-    if (this.convergence.length || this.convergenceBusy) {
-      this.paintConvergenceResults();
-      return;
-    }
-    this.runConvergenceAnalysis();
-  }
-
-  private invalidateConvergence(): void {
-    this.convergenceToken++;
-    this.convergence = [];
-    this.convergenceBusy = false;
-    if (this.activeTab === 'convergence') {
-      this.paintConvergenceResults();
-      this.ensureConvergence();
-    }
-  }
-
-  private runConvergenceAnalysis(): void {
-    if (this.convergenceBusy) return;
-    this.convergenceBusy = true;
-    const token = ++this.convergenceToken;
-    this.paintConvergenceResults();
-
-    const radius = Number(this.radiusInput.value);
-    const mass = Number(this.massInput.value);
-    const restitution = Number(this.restitutionInput.value);
-    const friction = Number(this.frictionInput.value);
-    const launch: LaunchSpec =
-      this.lastLaunch ?? {
-        position: new Vec2(2, 1.5),
-        velocity: new Vec2(8, 10),
-        radius,
-        mass,
-        restitution,
-        friction,
-      };
-
-    window.setTimeout(() => {
-      const analysisConfig = { ...this.world.config };
-      if (analysisConfig.airModel === 'none') {
-        analysisConfig.airModel = 'quadratic';
-        analysisConfig.airDensity = Math.max(analysisConfig.airDensity, 1.2);
-        analysisConfig.dragCoefficient = Math.max(analysisConfig.dragCoefficient, 0.6);
-      }
-      if (analysisConfig.gravityY === 0) analysisConfig.gravityY = -9.81;
-
-      const results = runConvergence(analysisConfig, launch, 2);
-      if (token !== this.convergenceToken) return;
-
-      this.convergence = results;
-      this.convergenceBusy = false;
-      this.paintConvergenceResults();
-    }, 30);
   }
 }

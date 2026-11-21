@@ -35,9 +35,9 @@ El proyecto tiene dos capas:
 
 1. **Simulación**: un motor de física 2D propio que integra círculos con
    gravedad, colisiones, fricción, rotación y arrastre.
-2. **Laboratorio de cálculo**: paneles que usan los datos de la simulación, o
-   funciones analíticas de prueba, para estudiar derivación, cuadratura y
-   convergencia.
+2. **Laboratorio de cálculo**: paneles que usan los datos de la simulación para
+   estudiar derivación y cuadratura. El análisis de convergencia de integradores
+   se conserva como validación interna.
 
 Unidades del Sistema Internacional:
 
@@ -273,7 +273,7 @@ En una gráfica log–log, la pendiente es el orden. Órdenes esperados:
 | Euler semi-implícito | `O(h²)` | `O(h)` | +1 |
 | RK4 | `O(h⁵)` | `O(h⁴)` | +4 |
 
-La sección 9 detalla cómo se mide en la app.
+La sección 9 detalla cómo se mide en la validación interna.
 
 ### 3.6 Substepping antitunneling
 
@@ -866,12 +866,10 @@ error(dt) = |r_final(dt) − r_final(referencia)|
 ```
 
 5. Ajusta una recta por mínimos cuadrados a `log10(error)` vs `log10(dt)`.
-6. Muestra la pendiente en la gráfica y, en la tabla, el orden medido junto con
-   el error absoluto y relativo al `dt` actual.
+6. Muestra la pendiente y el error final para cada `dt`.
 
-La pestaña **Precisión** ejecuta el análisis automáticamente al abrirse y guarda
-el resultado en caché. La caché se invalida al cambiar de escena o al lanzar un
-cuerpo nuevo.
+El módulo `runConvergence` se conserva como validación interna y lo ejecuta el
+test de convergencia. La interfaz actual ya no muestra esta pestaña.
 
 La referencia es fiable porque el error de RK4 con `dt = 1/8192` es del orden de
 `10⁻¹⁶`, cerca de la precisión de la máquina.
@@ -886,7 +884,7 @@ El error se acota inferiormente a `10⁻¹⁵` para evitar `log(0)`.
 | Euler semi-implícito | ≈ +1 |
 | RK4 | ≈ +4 |
 
-Valores medidos en la app: aproximadamente **0.99**, **1.00** y **4.04**.
+Valores medidos en la validación: aproximadamente **0.99**, **1.00** y **4.04**.
 
 Una pendiente `p = 4` significa que al reducir `dt` a la mitad el error cae
 alrededor de 16 veces. Una pendiente `p = 1`, que cae a la mitad.
@@ -1130,9 +1128,6 @@ Cada pestaña muestra una sola gráfica y un resumen de resultados.
   simulador. Las tarjetas resumen el error medio y la longitud de trayectoria;
   la tabla compara las cinco cuadraturas de `∫|v| dt` y resalta la de menor
   error.
-- **Precisión**: análisis de orden con referencia RK4. Se ejecuta al abrir la
-  pestaña y la tabla muestra orden, error absoluto y error relativo al `dt`
-  actual.
 
 ### Controles
 
@@ -1155,7 +1150,6 @@ Cada pestaña muestra una sola gráfica y un resumen de resultados.
    chico aumenta el redondeo y uno grande aumenta el truncamiento.
 4. **Cuadratura**: comparar la tabla y ver qué método queda más cerca de la
    longitud real de la trayectoria.
-5. **Precisión**: abrir la pestaña y comprobar los órdenes +1, +1 y +4.
 
 ---
 

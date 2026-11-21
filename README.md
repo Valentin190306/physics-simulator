@@ -2,8 +2,8 @@
 
 Sandbox de física 2D en TypeScript y Canvas que funciona como laboratorio visual de
 cálculo diferencial e integral. Lanzas círculos, observas trayectorias, colisiones,
-fricción y arrastre atmosférico, y al mismo tiempo analizas derivadas numéricas,
-cuadraturas y convergencia de integradores.
+fricción y arrastre atmosférico, y al mismo tiempo analizas derivadas numéricas y
+cuadraturas. La convergencia de integradores se conserva como validación interna.
 
 Motor de física escrito desde cero, sin librerías externas. La interfaz está en español.
 
@@ -43,9 +43,6 @@ Motor de física escrito desde cero, sin librerías externas. La interfaz está 
   Simpson para estimar la distancia recorrida integrando `|v| dt`. La pestaña
   muestra los cinco métodos en una tabla, comparados con la longitud real de la
   trayectoria.
-- **Precisión del integrador**: Euler explícito, Euler semi-implícito y RK4 con
-  el mismo lanzamiento a distintos `dt`, frente a una referencia RK4. La tabla
-  indica el orden medido y el error absoluto y relativo al `dt` actual.
 - **Energía** cinética, potencial y total a lo largo del tiempo.
 
 ### Nomenclatura
@@ -150,20 +147,6 @@ presupuesto = max(0.45·r_min, 0.02)
 n = clamp(ceil(v_max·dt / presupuesto), 1, 24)
 ```
 
-## Notas de cálculo
-
-- La derivada central `[f(t+h) − f(t−h)] / 2h` tiene error de truncamiento
-  `O(h²)` y error de redondeo que crece al disminuir `h`. El mínimo teórico de
-  la curva en U aparece alrededor de `h ≈ 10⁻⁵`; la interfaz ya no dibuja esa
-  curva, pero conserva el cálculo en `derivativeErrorVsH`.
-- La integral de `|v| dt` aproxima la longitud de la trayectoria. Comparar los
-  métodos con la distancia real muestra el orden de cada cuadratura: Riemann
-  `O(h)`, trapecio `O(h²)` y Simpson `O(h⁴)` para funciones suaves.
-- En convergencia, una pendiente `p` significa `error ∝ dt^p`. Si el entorno no
-  tiene aire, el análisis fuerza arrastre cuadrático para que RK4 muestre su
-  orden `O(dt⁴)`; con solo gravedad el movimiento es polinómico y los errores
-  caen por debajo de la precisión de la referencia.
-
 ## Validación
 
 Los tests cubren:
@@ -174,4 +157,3 @@ Los tests cubren:
 - Choque elástico 1D, conservación de momento y energía.
 - Reposo estable sobre el suelo y bola rápida sin atravesarlo.
 - Velocidad terminal lineal y cuadrática, y disipación de energía.
-- Orden de convergencia de los tres integradores.
